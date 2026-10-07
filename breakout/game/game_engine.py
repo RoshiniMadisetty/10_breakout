@@ -16,7 +16,14 @@ class GameEngine:
         self.lives = 3
         self.game_over = False
 
-        self.paddle = Paddle(x=WIDTH / 2, y=HEIGHT - 30)
+        self.score = 0
+        self.multiplier = 1
+
+        self.paddle = Paddle(
+            x=WIDTH / 2,
+            y=HEIGHT - 30,
+        )
+
         self._reset_ball()
         self.bricks = self._build_bricks()
 
@@ -33,12 +40,38 @@ class GameEngine:
 
         for row in range(5):
             for col in range(10):
-                bricks.append(
-                    Brick(
-                        x=50 + col * 70,
-                        y=50 + row * 30,
+                x = 50 + col * 70
+                y = 50 + row * 30
+
+                if row == 0:
+                    bricks.append(
+                        Brick(
+                            x=x,
+                            y=y,
+                            brick_type=Brick.UNBREAKABLE,
+                            hits_remaining=-1,
+                        )
                     )
-                )
+
+                elif row == 1:
+                    bricks.append(
+                        Brick(
+                            x=x,
+                            y=y,
+                            brick_type=Brick.STRONG,
+                            hits_remaining=3,
+                        )
+                    )
+
+                else:
+                    bricks.append(
+                        Brick(
+                            x=x,
+                            y=y,
+                            brick_type=Brick.NORMAL,
+                            hits_remaining=1,
+                        )
+                    )
 
         return bricks
 
@@ -61,12 +94,19 @@ class GameEngine:
             self._reset_game()
 
     def _reset_game(self):
-        self.paddle = Paddle(x=WIDTH / 2, y=HEIGHT - 30)
+        self.paddle = Paddle(
+            x=WIDTH / 2,
+            y=HEIGHT - 30,
+        )
+
         self._reset_ball()
         self.bricks = self._build_bricks()
 
         self.lives = 3
         self.game_over = False
+
+        self.score = 0
+        self.multiplier = 1
 
     def update(self):
         if self.game_over:
@@ -76,7 +116,9 @@ class GameEngine:
         self.ball.bounce_off_walls(WIDTH)
 
         if (
-            self.ball.get_rect().colliderect(self.paddle.get_rect())
+            self.ball.get_rect().colliderect(
+                self.paddle.get_rect()
+            )
             and self.ball.vy > 0
         ):
             self.ball.bounce_off_paddle(
@@ -84,10 +126,28 @@ class GameEngine:
             )
 
         for brick in self.bricks:
-            if handle_ball_brick_collision(self.ball, brick):
-                brick.hits_remaining -= 1
+            if handle_ball_brick_collision(
+                self.ball,
+                brick,
+            ):
+                destroyed = brick.hit()
 
-                if brick.hits_remaining <= 0:
+                if destroyed:
+                    if brick.brick_type == Brick.NORMAL:
+                        points = 100
+
+                    elif brick.brick_type == Brick.STRONG:
+                        points = 200
+
+                    else:
+                        points = 0
+
+                    if points > 0:
+                        self.score += (
+                            points * self.multiplier
+                        )
+                        self.multiplier += 1
+
                     self.bricks.remove(brick)
 
                 break
@@ -95,8 +155,11 @@ class GameEngine:
         if self.ball.is_below(HEIGHT):
             self.lives -= 1
 
+            self.multiplier = 1
+
             if self.lives > 0:
                 self._reset_ball()
+
             else:
                 self.game_over = True
 
@@ -120,6 +183,20 @@ class GameEngine:
             font,
             f"Lives: {self.lives}",
             (10, 35),
+        )
+
+        renderer.draw_text(
+            surface,
+            font,
+            f"Score: {self.score}",
+            (10, 60),
+        )
+
+        renderer.draw_text(
+            surface,
+            font,
+            f"Multiplier: x{self.multiplier}",
+            (10, 85),
         )
 
         if self.game_over:
