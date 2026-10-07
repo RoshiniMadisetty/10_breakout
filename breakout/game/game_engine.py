@@ -1,24 +1,84 @@
+"""
+GameEngine: owns the paddle, ball, and bricks.
+"""
+
 import pygame
 
-from game.ball import Ball
 from game.paddle import Paddle
+from game.ball import Ball
 from game.brick import Brick
 from game.collision import handle_ball_brick_collision
-from game import renderer
+from game.renderer import WIDTH, HEIGHT
 
-
-WIDTH = 800
-HEIGHT = 600
+BRICK_ROWS = 4
+BRICK_COLS = 8
+BRICK_WIDTH = 68
+BRICK_HEIGHT = 22
+BRICK_GAP = 6
+BRICK_TOP_MARGIN = 50
 
 
 class GameEngine:
     def __init__(self):
         self.lives = 3
-        self.game_over = False
-
         self.score = 0
         self.multiplier = 1
+        self.game_over = False
 
+        self._reset_game()
+
+    def _build_bricks(self):
+        bricks = []
+
+        total_width = (
+            BRICK_COLS * (BRICK_WIDTH + BRICK_GAP)
+            - BRICK_GAP
+        )
+
+        start_x = (WIDTH - total_width) / 2
+
+        for row in range(BRICK_ROWS):
+            for col in range(BRICK_COLS):
+                x = start_x + col * (BRICK_WIDTH + BRICK_GAP)
+                y = BRICK_TOP_MARGIN + row * (
+                    BRICK_HEIGHT + BRICK_GAP
+                )
+
+                if row == 0:
+                    brick_type = Brick.NORMAL
+
+                elif row == 1:
+                    brick_type = Brick.STRONG
+
+                elif row == 2:
+                    brick_type = Brick.UNBREAKABLE
+
+                else:
+                    brick_type = (
+                        Brick.STRONG
+                        if col % 2 == 0
+                        else Brick.NORMAL
+                    )
+
+                bricks.append(
+                    Brick(
+                        x,
+                        y,
+                        BRICK_WIDTH,
+                        BRICK_HEIGHT,
+                        brick_type,
+                    )
+                )
+
+        return bricks
+
+    def _reset_ball(self):
+        self.ball = Ball(
+            x=WIDTH / 2,
+            y=HEIGHT - 50,
+        )
+
+    def _reset_game(self):
         self.paddle = Paddle(
             x=WIDTH / 2,
             y=HEIGHT - 30,
@@ -27,53 +87,10 @@ class GameEngine:
         self._reset_ball()
         self.bricks = self._build_bricks()
 
-    def _reset_ball(self):
-        self.ball = Ball(
-            x=WIDTH / 2,
-            y=HEIGHT / 2,
-            vx=4,
-            vy=-4,
-        )
-
-    def _build_bricks(self):
-        bricks = []
-
-        for row in range(5):
-            for col in range(10):
-                x = 50 + col * 70
-                y = 50 + row * 30
-
-                if row == 0:
-                    bricks.append(
-                        Brick(
-                            x=x,
-                            y=y,
-                            brick_type=Brick.UNBREAKABLE,
-                            hits_remaining=-1,
-                        )
-                    )
-
-                elif row == 1:
-                    bricks.append(
-                        Brick(
-                            x=x,
-                            y=y,
-                            brick_type=Brick.STRONG,
-                            hits_remaining=3,
-                        )
-                    )
-
-                else:
-                    bricks.append(
-                        Brick(
-                            x=x,
-                            y=y,
-                            brick_type=Brick.NORMAL,
-                            hits_remaining=1,
-                        )
-                    )
-
-        return bricks
+        self.lives = 3
+        self.score = 0
+        self.multiplier = 1
+        self.game_over = False
 
     def handle_input(self, keys_pressed):
         if self.game_over:
@@ -93,21 +110,6 @@ class GameEngine:
         if key == pygame.K_r and self.game_over:
             self._reset_game()
 
-    def _reset_game(self):
-        self.paddle = Paddle(
-            x=WIDTH / 2,
-            y=HEIGHT - 30,
-        )
-
-        self._reset_ball()
-        self.bricks = self._build_bricks()
-
-        self.lives = 3
-        self.game_over = False
-
-        self.score = 0
-        self.multiplier = 1
-
     def update(self):
         if self.game_over:
             return
@@ -115,24 +117,23 @@ class GameEngine:
         self.ball.update()
         self.ball.bounce_off_walls(WIDTH)
 
+        paddle_rect = self.paddle.get_rect()
+        ball_rect = self.ball.get_rect()
+
         if (
-            self.ball.get_rect().colliderect(
-                self.paddle.get_rect()
-            )
-            and self.ball.vy > 0
+            self.ball.vy > 0
+            and ball_rect.colliderect(paddle_rect)
         ):
-            self.ball.bounce_off_paddle(
-                self.paddle.get_rect()
-            )
+            self.ball.bounce_off_paddle(paddle_rect)
 
         for brick in self.bricks:
             if handle_ball_brick_collision(
                 self.ball,
                 brick,
             ):
-                destroyed = brick.hit()
+                if brick.hit():
+                    self.bricks.remove(brick)
 
-                if destroyed:
                     if brick.brick_type == Brick.NORMAL:
                         points = 100
 
@@ -148,8 +149,6 @@ class GameEngine:
                         )
                         self.multiplier += 1
 
-                    self.bricks.remove(brick)
-
                 break
 
         if self.ball.is_below(HEIGHT):
@@ -159,11 +158,12 @@ class GameEngine:
 
             if self.lives > 0:
                 self._reset_ball()
-
             else:
                 self.game_over = True
 
     def draw(self, surface, font):
+        from game import renderer
+
         renderer.draw_scene(
             surface,
             self.paddle,
